@@ -41,7 +41,7 @@ def get_user_role(email: str):
     logger.info(f"Received request: {email}")
     try:
         claims = get_user_custom_claims(email)
-        return {"email": email, "role": claims.get("role", "No role assigned")}
+        return {"role": claims.get("role", "No role assigned")}
     except Exception as e:
         logger.error(f"Error: {e}")
         raise HTTPException(status_code=400, detail=str(e))
