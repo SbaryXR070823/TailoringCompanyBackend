@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict
-from bson import ObjectId
 from datetime import datetime
+from bson import ObjectId
 
 
 class PyObjectId(ObjectId):
