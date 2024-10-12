@@ -1,11 +1,6 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from firebase.firebase_config import set_custom_user_claims, get_user_custom_claims, verify_firebase_token
-import logging
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from routers import auth, materials
 
 app = FastAPI()
 
@@ -22,31 +17,6 @@ app.add_middleware(
     allow_headers=["*"],  
 )
 
-class RoleAssignmentRequest(BaseModel):
-    email: str
-    role: str
-
-@app.post("/assign-role/")
-def assign_role(request: RoleAssignmentRequest):
-    logger.info(f"Received request: {request}")
-    try:
-        result = set_custom_user_claims(request.email, request.role)
-        return result
-    except Exception as e:
-        logger.error(f"Error: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
-    
-@app.get("/user-role/{email}")
-def get_user_role(email: str):
-    logger.info(f"Received request: {email}")
-    try:
-        claims = get_user_custom_claims(email)
-        return {"role": claims.get("role", "No role assigned")}
-    except Exception as e:
-        logger.error(f"Error: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
-
-@app.get("/secure-endpoint")
-def secure_endpoint(token: str):
-    decoded_token = verify_firebase_token(token)
-    return {"message": "Token is valid", "user_id": decoded_token['uid']}
+# Include routers
+app.include_router(auth.router)
+app.include_router(materials.router)
