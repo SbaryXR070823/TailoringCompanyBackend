@@ -1,21 +1,36 @@
 from fastapi import APIRouter, HTTPException
 from mongo.mongo_service import MongoDBService
+import logging
 from bson import ObjectId
-router = APIRouter()
 
-# Create an instance of the MongoDBService with the same connection string
+router = APIRouter()
+logger = logging.getLogger(__name__)
+
 connection_string = "mongodb://localhost:27017/TailoringDb"
 mongodb_service = MongoDBService(connection_string=connection_string)
 
 @router.get("/materials/")
 async def get_materials():
-    materials = await mongodb_service.find_all(collection_name='materials')
-    return materials
+    try:
+        materials = await mongodb_service.find_all(collection_name='materials')
+        logger.info(f"Retrieved {len(materials)} materials")
+        return materials
+    except Exception as e:
+        logger.error(f"Error retrieving materials: {str(e)}")
+        raise HTTPException(status_code=500, detail="An error occurred while retrieving materials")
 
 @router.post("/materials/")
 async def create_material(material: dict):
+    if '_id' in material:
+        del material['_id']
+    
     material_id = await mongodb_service.insert_one(collection_name='materials', document=material)
-    return {"id": material_id}
+    new_material = await mongodb_service.find_one(collection_name='materials', query={"_id": ObjectId(material_id)})
+
+    if not new_material:
+        raise HTTPException(status_code=500, detail="Error retrieving the created material")
+
+    return new_material 
 
 @router.get("/materials/{material_id}")
 async def get_material(material_id: str):
