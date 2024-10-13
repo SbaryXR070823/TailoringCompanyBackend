@@ -41,8 +41,10 @@ async def get_material(material_id: str):
 
 @router.put("/materials/{material_id}")
 async def update_material(material_id: str, material: dict):
+    # Remove _id from the material dictionary if it exists, mongo loves to throw errors for some a reason.......
+    material.pop('_id', None)
     updated_material = await mongodb_service.update_one(
-        collection_name='materials', 
+        collection_name='materials',
         query={"_id": ObjectId(material_id)},
         update=material
     )
