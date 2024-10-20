@@ -34,7 +34,6 @@ class ModelTypeEnum(str, Enum):
     price_predictions = "PricePredictions"
     material_price_prediction = "MaterialPricePrediction"
 
-
 class TypeEnum(str, Enum):
     dresses = "Dresses"
     bed_covers = "BedCovers"
@@ -97,6 +96,18 @@ class MonthOrdersPredictions(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+    class Config:
+        allow_population_by_field_name = True
+        arbitrary_types_allowed = True
+        json_encoders = {ObjectId: str}
+
+class MaterialsPriceUpdated(BaseModel):
+    id: Optional[PyObjectId] = Field(default_factory=PyObjectId, alias="_id")
+    materialId: Optional[PyObjectId]
+    price: float
+    updatedAt: datetime
+    isLatest: bool
+    
     class Config:
         allow_population_by_field_name = True
         arbitrary_types_allowed = True

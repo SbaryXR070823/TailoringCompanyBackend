@@ -54,3 +54,19 @@ class MongoDBService:
         logger.info(f"Deleting document from {collection_name} with query: {query}")
         result = await self.db[collection_name].delete_one(query)
         return result.deleted_count
+
+    async def find_with_conditions(self, collection_name: str, conditions: dict):
+        logger.info(f"Finding documents in {collection_name} with conditions: {conditions}")
+        documents = []
+        try:
+            cursor = self.db[collection_name].find(conditions)
+            async for document in cursor:
+                document['_id'] = str(document['_id'])
+                documents.append(document)
+                logger.debug(f"Retrieved document: {document['_id']}")
+            
+            logger.info(f"Retrieved {len(documents)} documents matching conditions from {collection_name}")
+        except Exception as e:
+            logger.error(f"Error retrieving documents with conditions from {collection_name}: {str(e)}")
+        
+        return documents
