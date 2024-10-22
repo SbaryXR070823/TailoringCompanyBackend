@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routers import auth, materials, materialsHistory
+from routers import auth, materials, materialsHistory, models_training, models_prompt
 from mongo.mongo_service import MongoDBService
 
 app = FastAPI()
@@ -30,3 +30,5 @@ async def read_root():
 app.include_router(auth.router)
 app.include_router(materials.router)
 app.include_router(materialsHistory.router)
+app.include_router(models_training.router) 
+app.include_router(models_prompt.router) 
