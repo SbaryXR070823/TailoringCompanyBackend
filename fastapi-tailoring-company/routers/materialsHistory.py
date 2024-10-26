@@ -64,6 +64,19 @@ async def get_materials_price_update(update_id: str):
         raise HTTPException(status_code=404, detail="Materials price update not found")
     return price_update
 
+@router.get("/materials_prices_updated_for_material_id/{material_id}")
+async def get_materials_price_updates_for_material_id(material_id: str):
+    material_updates = await mongodb_service.find_with_conditions(
+        collection_name='materials_price_updates', 
+        conditions={"materialId": material_id}
+    )
+    print(material_id)
+    if not material_updates:
+        raise HTTPException(status_code=404, detail="Materials price updates not found")
+    return material_updates
+        
+    
+
 @router.put("/materials_price_updates/{update_id}")
 async def update_materials_price_update(update_id: str, price_update: dict):
     price_update.pop('_id', None)
