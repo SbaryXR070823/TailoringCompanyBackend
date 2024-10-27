@@ -3,6 +3,7 @@ import numpy as np
 from sklearn.ensemble import RandomForestRegressor
 from datetime import datetime
 from typing import List, Dict
+from bson import ObjectId
 
 async def train_material_price_model(mongodb_service):
     """
@@ -49,6 +50,16 @@ async def train_material_price_model(mongodb_service):
                 
             X.append(features)
             y.append(next_price)
+            
+        material_to_update = await mongodb_service.find_one(collection_name='materials', query={"_id": ObjectId(material_id)})
+        # silly mongo, i need to remove this every time updating something
+        material_to_update.pop('_id', None)
+        material_to_update['is_used_in_ai'] = True;
+        await mongodb_service.update_one(
+            collection_name='materials',
+            query={"_id": ObjectId(material_id)},
+            update=material_to_update
+        )
     
     if len(X) == 0:
         raise ValueError("Not enough historical data for training")
