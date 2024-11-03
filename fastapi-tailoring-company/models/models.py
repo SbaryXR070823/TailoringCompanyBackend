@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, Tuple
 from typing import List, Optional, Dict
 from datetime import datetime
 from bson import ObjectId
@@ -76,7 +76,7 @@ class Products(BaseModel):
     id: Optional[PyObjectId] = Field(default_factory=PyObjectId, alias="_id")
     name: str
     workmanship: float
-    materials: List[str] 
+    materials: List[Tuple[int, str]] 
     materials_price: float
     time_taken: int
     type: TypeEnum
