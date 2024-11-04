@@ -14,7 +14,7 @@ mongodb_service = MongoDBService(connection_string=connection_string)
 async def load_model_materials_price_predictions(material_id: str):
     stored_model = await mongodb_service.find_one(
         collection_name='model_storage',
-        query={"model_name": "material_price_model"}
+        query={"model_name": "material_price_model", "isLatest" : True}
     )
     
     model = pickle.loads(stored_model['model'])

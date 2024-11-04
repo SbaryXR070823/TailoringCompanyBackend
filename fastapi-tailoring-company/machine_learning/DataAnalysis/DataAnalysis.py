@@ -19,7 +19,7 @@ def interpret_distribution(data):
     skewness = stats.skew(data.dropna())
     kurtosis = stats.kurtosis(data.dropna())
     
-    # Perform Shapiro-Wilk test for normality
+    # test for normality
     _, p_value = stats.shapiro(data.dropna())
     
     interpretation = []
@@ -182,33 +182,6 @@ def analyze_data(mongodb_service, collection_name):
             sns.barplot(x=value_counts.index, y=value_counts.values)
             plt.title(f'Distribution of {col}')
             plt.xticks(rotation=45)
-            plt.tight_layout()
-            plt.show()
-    
-    # Time Series Analysis with interpretation
-    date_cols = df.select_dtypes(include=['datetime64']).columns
-    if not date_cols.empty:
-        print("\n=== Time Series Analysis ===")
-        for date_col in date_cols:
-            df[date_col] = pd.to_datetime(df[date_col])
-            print(f"\nAnalysis of {date_col}:")
-            temp_stats = df[date_col].describe()
-            print("\nTemporal Distribution:")
-            print(temp_stats)
-            
-            # Calculate time-based metrics
-            date_range = (temp_stats['max'] - temp_stats['min']).days
-            avg_interval = (temp_stats['max'] - temp_stats['min']).days / (len(df) - 1) if len(df) > 1 else 0
-            
-            print("\nInterpretation:")
-            print(f"- Time span: {date_range} days")
-            print(f"- Average interval between records: {avg_interval:.1f} days")
-            
-            plt.figure(figsize=(12, 6))
-            df[date_col].hist(bins=30)
-            plt.title(f'Distribution of {date_col}')
-            plt.xlabel(date_col)
-            plt.ylabel('Frequency')
             plt.tight_layout()
             plt.show()
 

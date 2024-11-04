@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from mongo.mongo_service import MongoDBService
 import logging
+from datetime import datetime
 from bson import ObjectId
 
 
@@ -22,6 +23,27 @@ async def get_materials_price_updates():
 
 @router.post("/materials_price_updates/")
 async def create_materials_price_update(price_update: dict):    
+    if 'updatedAt' in price_update:
+            try:
+                # Parse the ISO date string from Angular (handles milliseconds and Z)
+                date_str = price_update['updatedAt']
+                if isinstance(date_str, str):
+                    # Split at decimal point to remove milliseconds if present
+                    date_str = date_str.split('.')[0] + 'Z'
+                    updated_at = datetime.strptime(date_str, "%Y-%m-%dT%H:%M:%SZ")
+                else:
+                    # If it's already a datetime object
+                    updated_at = date_str
+                
+                # Keep as datetime object for MongoDB
+                price_update['updatedAt'] = updated_at
+
+            except ValueError as e:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid date format. Error: {str(e)}"
+                )
+    
     material_id = price_update.get('materialId')
     
     logger.info(f"Querying for materialId: {material_id} with isLatest=True")
@@ -43,7 +65,7 @@ async def create_materials_price_update(price_update: dict):
 
     if '_id' in price_update:
         del price_update['_id']
-    
+        
     new_id = await mongodb_service.insert_one(collection_name='materials_price_updates', document=price_update)
     
     new_price_update = await mongodb_service.find_one(

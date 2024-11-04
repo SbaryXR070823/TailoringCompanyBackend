@@ -69,10 +69,10 @@ async def train_material_price_model(mongodb_service):
     y = np.array(y)
     
     model = RandomForestRegressor(
-        n_estimators=200,  # More trees
+        n_estimators=400,  # More trees
         max_depth=8,       # Deeper trees
         min_samples_split=2,
-        random_state=42
+        random_state=50
     )
     model.fit(X, y)
     
