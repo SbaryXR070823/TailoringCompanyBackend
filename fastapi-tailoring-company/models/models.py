@@ -65,6 +65,7 @@ class Orders(BaseModel):
     final_image: Optional[str]  
     status: StatusEnum
     pickup_time: datetime
+    finished_order_time: Optional[datetime]
 
     class Config:
         allow_population_by_field_name = True
