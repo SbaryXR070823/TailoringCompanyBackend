@@ -24,12 +24,11 @@ async def get_orders():
 # Create a new order
 @router.post("/orders/")
 async def create_order(order: dict):
-    order_dict = order.dict(by_alias=True)
-    if '_id' in order_dict:
-        del order_dict['_id']
+    if '_id' in order:
+        del order['_id']
 
     try:
-        order_id = await mongodb_service.insert_one(collection_name='orders', document=order_dict)
+        order_id = await mongodb_service.insert_one(collection_name='orders', document=order)
         new_order = await mongodb_service.find_one(collection_name='orders', query={"_id": ObjectId(order_id)})
         
         if not new_order:

@@ -1,9 +1,11 @@
-import pandas as pd
-import numpy as np
+
 import matplotlib.pyplot as plt
 import seaborn as sns
 from pymongo import MongoClient
 from scipy import stats
+import pandas as pd
+import numpy as np
+
 
 class MongoDBService:
     def __init__(self, connection_string):
@@ -178,7 +180,7 @@ def analyze_data(mongodb_service, collection_name):
             print("\nInterpretation:")
             print(interpret_categorical_distribution(value_counts))
             
-            plt.figure(figsize=(10, 6))
+            plt.figure(figsize=(20,(5 * len(categorical_cols) + 1) // 2))
             sns.barplot(x=value_counts.index, y=value_counts.values)
             plt.title(f'Distribution of {col}')
             plt.xticks(rotation=45)
