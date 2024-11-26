@@ -60,6 +60,7 @@ class Orders(BaseModel):
     id: Optional[PyObjectId] = Field(default_factory=PyObjectId, alias="_id")
     name: str
     description: str
+    userEmail: str
     product_id: Optional[PyObjectId]
     image_reference: Optional[str]  
     final_image: Optional[str]  
