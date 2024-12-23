@@ -88,3 +88,21 @@ async def delete_order(order_id: str):
     except Exception as e:
         logger.error(f"Error deleting order with ID {order_id}: {str(e)}")
         raise HTTPException(status_code=500, detail="An error occurred while deleting the order")
+    
+@router.get("/orders/by_user/{userEmail}")
+async def get_orders_by_user(userEmail: str):
+    try:
+        orders = await mongodb_service.find_with_conditions(
+            collection_name='orders',
+            conditions={"userEmail": userEmail}
+        )
+
+        if not orders:
+            logger.info(f"No orders found for user ID: {userEmail}")
+            raise HTTPException(status_code=404, detail="No orders found for this user")
+
+        logger.info(f"Retrieved {len(orders)} orders for user ID: {userEmail}")
+        return orders
+    except Exception as e:
+        logger.error(f"Error retrieving orders for user ID {userEmail}: {str(e)}")
+        raise HTTPException(status_code=500, detail="An error occurred while retrieving orders for the user")
