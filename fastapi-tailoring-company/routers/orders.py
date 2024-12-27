@@ -57,7 +57,7 @@ async def get_order(order_id: str):
 # Update an order by ID
 @router.put("/orders/{order_id}")
 async def update_order(order_id: str, order: dict):
-    update_data = order.dict(by_alias=True, exclude_unset=True)
+    update_data = order
     update_data.pop('_id', None)
 
     try:
