@@ -27,6 +27,7 @@ class StatusEnum(str, Enum):
     in_progress = "InProgress"
     finished = "Finished"
     declined = "Declined"
+    PickedUp = "PickedUp"
 
 
 class ModelTypeEnum(str, Enum):
