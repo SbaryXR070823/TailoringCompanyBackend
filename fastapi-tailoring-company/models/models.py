@@ -115,3 +115,13 @@ class MaterialsPriceUpdated(BaseModel):
         allow_population_by_field_name = True
         arbitrary_types_allowed = True
         json_encoders = {ObjectId: str}
+
+
+class WorkmanshipPredictionRequest(BaseModel):
+    product_type: str
+    materials: Dict[str, str]  
+    materials_price: float
+    estimated_time_taken: float
+    estimated_pickup_time: datetime
+    estimated_finish_time: datetime
+
