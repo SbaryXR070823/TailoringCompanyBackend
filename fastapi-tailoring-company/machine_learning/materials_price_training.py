@@ -15,8 +15,7 @@ async def train_material_price_model(mongodb_service):
     
     df['year'] = pd.to_datetime(df['updatedAt']).dt.year
     df['materialId'] = df['materialId'].astype(str)
-    
-    # Sort by materialId and year
+
     df = df.sort_values(['materialId', 'year'])
     
     X, y = [], []
@@ -64,7 +63,6 @@ async def train_material_price_model(mongodb_service):
     if len(X) == 0:
         raise ValueError("Not enough historical data for training")
     
-    # Convert to numpy arrays
     X = np.array(X)
     y = np.array(y)
     

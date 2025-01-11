@@ -7,6 +7,7 @@ import logging
 from bson import ObjectId
 from bson.binary import Binary
 from datetime import date
+from sklearn.preprocessing import OneHotEncoder
 
 logger = logging.getLogger(__name__)
 
@@ -58,15 +59,9 @@ async def start_workmanship_training():
     Endpoint to start training the workmanship prediction model.
     """
     try:
-        # Train the model
         model, encoder = await train_workmanship_model(mongodb_service)
-        # Serialize the model and encoder
-        model_binary = pickle.dumps({
-            "model": model,
-            "encoder_categories": encoder.categories_
-            })
-
-        # Check for existing latest model
+        model_binary = serialize_model(model, encoder)
+        
         existing_latest_model = await mongodb_service.find_with_conditions(
             collection_name="model_storage",
             conditions={"model_name": "workmanship_model", "isLatest": True}
@@ -76,7 +71,6 @@ async def start_workmanship_training():
             logger.info(
                 f"Updating existing latest machine learning model for workmanship_model with id: {existing_latest_model[0]['_id']}"
             )
-            # Mark the previous latest model as not the latest
             await mongodb_service.update_one(
                 collection_name="model_storage",
                 query={"_id": ObjectId(existing_latest_model[0]["_id"])},
@@ -99,3 +93,42 @@ async def start_workmanship_training():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Training failed: {str(e)}")
     
+
+
+def serialize_model(model, encoder):
+    """
+    Serialize model and encoder with version compatibility handling
+    """
+    encoder_data = {
+        "categories_": encoder.categories_,
+        "dtype": encoder.dtype,
+        "handle_unknown": getattr(encoder, "handle_unknown", "error")
+    }
+    
+    if hasattr(encoder, "sparse_output"):
+        encoder_data["sparse_output"] = encoder.sparse_output
+    else:
+        encoder_data["sparse_output"] = getattr(encoder, "sparse", True)
+    
+    model_data = {
+        "model": model,
+        "encoder_data": encoder_data
+    }
+    return pickle.dumps(model_data)
+
+def deserialize_model(stored_data):
+    """
+    Deserialize model and encoder with version compatibility handling
+    """
+    model_data = pickle.loads(stored_data)
+    model = model_data["model"]
+    
+    encoder_data = model_data["encoder_data"]
+    encoder = OneHotEncoder(
+        sparse_output=encoder_data["sparse_output"],
+        handle_unknown='ignore', 
+        dtype=encoder_data["dtype"]
+    )
+    encoder.categories_ = encoder_data["categories_"]
+    
+    return model, encoder
