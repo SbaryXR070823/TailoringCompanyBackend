@@ -70,3 +70,13 @@ class MongoDBService:
             logger.error(f"Error retrieving documents with conditions from {collection_name}: {str(e)}")
         
         return documents
+
+    async def find_by_id(self, collection_name: str, id: str):
+        from bson import ObjectId
+        logger.info(f"Finding document in {collection_name} by _id: {id}")
+        try:
+            document = await self.find_one(collection_name, {"_id": ObjectId(id)})
+            return document
+        except Exception as e:
+            logger.error(f"Error finding document by id in {collection_name}: {str(e)}")
+            return None
