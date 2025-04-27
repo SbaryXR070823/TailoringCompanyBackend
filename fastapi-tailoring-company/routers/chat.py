@@ -1,3 +1,6 @@
+import logging
+import json
+import requests
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect, Depends, Query, Header
 from typing import List, Dict, Optional
 from bson import ObjectId
@@ -8,8 +11,18 @@ from mongo.mongo_service import MongoDBService
 from models.chat_models import ChatThread, Message
 from firebase.firebase_config import verify_firebase_token, verify_token_from_db
 
+class DateTimeEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        elif isinstance(obj, ObjectId):
+            return str(obj)
+        return super(DateTimeEncoder, self).default(obj)
+
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+WEBSOCKET_SERVER_URL = "http://localhost:8001"
 
 connection_string = "mongodb://localhost:27017/TailoringDb"
 mongodb_service = MongoDBService(connection_string=connection_string)
@@ -81,7 +94,7 @@ class ConnectionManager:
     
     async def send_personal_message(self, message: dict, user_id: str):
         if user_id in self.active_connections:
-            await self.active_connections[user_id].send_text(json.dumps(message))
+            await self.active_connections[user_id].send_text(json.dumps(message, cls=DateTimeEncoder))
             logger.info(f"Message sent to user {user_id}")
             return True
         logger.info(f"User {user_id} not connected, message not sent")
@@ -93,7 +106,7 @@ class ConnectionManager:
         
         for admin_id, websocket in self.admin_connections.items():
             try:
-                await websocket.send_text(json.dumps(message))
+                await websocket.send_text(json.dumps(message, cls=DateTimeEncoder))
                 sent_count += 1
                 logger.info(f"Message broadcasted to admin {admin_id}")
             except Exception as e:
@@ -273,22 +286,70 @@ async def add_message_to_thread(
         recipient_id = thread["user_id"]
         await manager.send_personal_message(notify_payload, recipient_id)
     else:
-        await manager.broadcast_to_admins(notify_payload)
-
-    recipient_id = thread["user_id"] if role == "admin" else None
+        await manager.broadcast_to_admins(notify_payload)   
+        recipient_id = thread["user_id"] if role == "admin" else None
     if recipient_id:
         notify_payload = {
             "type": "new_message",
             "thread_id": thread_id,
             "message": new_message
         }
-        await manager.send_personal_message(notify_payload, recipient_id)
+        success = await manager.send_personal_message(notify_payload, recipient_id)
+        
+        if not success and thread.get("user_email"):
+            await manager.send_personal_message(notify_payload, thread["user_email"])
+    if role == "user":
+        await manager.broadcast_to_admins(notify_payload)
+    try:
+        ws_payload = {
+            "action": "broadcast_message",
+            "message": {
+                "type": "new_message",
+                "thread_id": thread_id,
+                "message": new_message,
+                "is_own_message": False
+            },
+            "sender_id": user_id,
+            "sender_role": role,
+            "recipient_id": thread["user_id"] if role == "admin" else None,
+            "recipient_email": thread.get("user_email", None) if role == "admin" else None,
+            "broadcast_to_admins": role == "user"
+        }
+        
+        payload_json = json.dumps(ws_payload, cls=DateTimeEncoder)
+        
+        response = requests.post(
+            f"{WEBSOCKET_SERVER_URL}/api/relay",
+            data=payload_json,
+            headers={"Content-Type": "application/json"}
+        )
+        
+        if response.status_code == 200:
+            logger.info(f"Message forwarded to WebSocket server successfully")
+        else:
+            logger.warning(f"Failed to forward message to WebSocket server: {response.status_code} - {response.text}")
+    except Exception as e:
+        logger.error(f"Error forwarding message to WebSocket server: {str(e)}")
 
-    return {"message": "Message added successfully", "thread_id": thread_id}
+    return {"message": "Message added successfully", "thread_id": thread_id, "message": new_message}
 
 @router.websocket("/ws/chat/{user_id}")
-async def websocket_endpoint(websocket: WebSocket, user_id: str, role: Optional[str] = Query(None)):
+async def websocket_endpoint(websocket: WebSocket, user_id: str, role: Optional[str] = Query(None), token: Optional[str] = Query(None)):
     try:
+        if not token:
+            await websocket.close(code=4003, reason="Missing authentication token")
+            return
+        try:
+            decoded_token = await verify_token_from_db(token)
+        except Exception as db_error:
+            try:
+                decoded_token = verify_firebase_token(token)
+            except Exception as fb_error:
+                await websocket.close(code=4003, reason="Invalid authentication token")
+                return
+        if str(decoded_token.get('uid')) != user_id:
+            await websocket.close(code=4003, reason="User ID does not match token")
+            return
         is_admin = role == "admin"
         if is_admin:
             user = await mongodb_service.find_by_id(
@@ -298,14 +359,13 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str, role: Optional[
             if not user or user.get("role") != "admin":
                 logger.warning(f"User {user_id} claiming to be admin but doesn't have admin role")
                 await websocket.close(code=4003, reason="Unauthorized")
-                return
-        await manager.connect(websocket, user_id, is_admin)
+                return        await manager.connect(websocket, user_id, is_admin)
         await websocket.send_text(json.dumps({
             "type": "connection_established",
             "user_id": user_id,
             "is_admin": is_admin,
             "timestamp": datetime.utcnow().isoformat()
-        }))
+        }, cls=DateTimeEncoder))
         try:
             while True:
                 data = await websocket.receive_text()

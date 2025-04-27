@@ -1,7 +1,8 @@
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, Request, Response, HTTPException, Depends, Query
 from fastapi.middleware.cors import CORSMiddleware
 from routers import auth, materials, materialsHistory, models_training, models_prompt, orders, products, chat
 from mongo.mongo_service import MongoDBService
+from firebase.firebase_config import verify_firebase_token
 import logging
 
 # Set up logging
@@ -32,22 +33,15 @@ app.add_middleware(
 # Add a middleware to log requests for debugging
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
-    # Log the request details
     logger.info(f"Request path: {request.url.path}")
     logger.info(f"Request method: {request.method}")
     
-    # Only log headers in debug mode to avoid logging sensitive information
     if logger.level <= logging.DEBUG:
         logger.debug(f"Request headers: {request.headers}")
     
     try:
-        # Process the request
         response = await call_next(request)
         
-        # Let the CORS middleware handle CORS - don't duplicate headers here
-        # This approach avoids conflicts between FastAPI's CORSMiddleware and manual headers
-        
-        # Log response status code
         logger.info(f"Response status: {response.status_code}")
         return response
     except Exception as e:
@@ -62,6 +56,36 @@ mongodb_service = MongoDBService(connection_string=connection_string)
 @app.get("/")
 async def read_root():
     return {"message": "Welcome to the Tailoring API!"}
+
+@app.get("/auth/verify-token")
+async def verify_token_endpoint_get(request: Request):
+    """Endpoint to verify a token via GET request using the Authorization header."""
+    try:
+        authorization = request.headers.get("Authorization")
+        if not authorization:
+            raise HTTPException(status_code=401, detail="Authorization header is missing")
+            
+        if not authorization.startswith("Bearer "):
+            raise HTTPException(status_code=401, detail="Invalid authorization format. Expected 'Bearer token'")
+            
+        token = authorization.replace("Bearer ", "")
+        decoded_token = verify_firebase_token(token)
+        
+        response = {
+            "_id": decoded_token.get("uid", ""),
+            "email": decoded_token.get("email", ""),
+            "role": decoded_token.get("role", "user"),
+            "name": decoded_token.get("name", ""),
+            "firebase_uid": decoded_token.get("uid", ""),
+            "token": token
+        }
+        
+        return response
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logger.error(f"Unexpected error during token verification: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 # Include routers
 app.include_router(auth.router)
