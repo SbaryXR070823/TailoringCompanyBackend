@@ -1,14 +1,14 @@
 import logging
 import json
 import requests
-from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect, Depends, Query, Header
+from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect, Depends, Query, Header, Form, UploadFile, File
 from typing import List, Dict, Optional
 from bson import ObjectId
 from datetime import datetime
 import logging
 import json
 from mongo.mongo_service import MongoDBService
-from models.chat_models import ChatThread, Message
+from models.chat_models import ChatThread, Message, FileReference
 from firebase.firebase_config import verify_firebase_token, verify_token_from_db
 
 class DateTimeEncoder(json.JSONEncoder):
@@ -253,12 +253,37 @@ async def add_message_to_thread(
             raise HTTPException(status_code=400, detail="Admins cannot send messages to other admins.")
 
     if role == "user" and thread["user_id"] != user_id:
-        raise HTTPException(status_code=403, detail="Not authorized to send messages to this thread")  
+        raise HTTPException(status_code=403, detail="Not authorized to send messages to this thread")
+    files = []
+    if "files" in message and isinstance(message["files"], list):
+        for file_ref in message["files"]:
+            # The incoming file reference might use storage_id instead of file_id
+            file_id = file_ref.get("file_id") or file_ref.get("storage_id")
+            
+            if not file_id:
+                logger.warning(f"Missing file_id or storage_id in file reference: {file_ref}")
+                continue
+                
+            file_metadata = await mongodb_service.find_by_id(
+                collection_name="chat_files",
+                id=ObjectId(file_id)
+            )
+            
+            if file_metadata:
+                files.append({
+                    "file_id": str(file_metadata["_id"]),
+                    "filename": file_metadata["filename"],
+                    "content_type": file_metadata["content_type"],
+                    "size": file_metadata["size"]
+                })
+            else:
+                logger.warning(f"File with ID {file_id} not found in database")
     new_message = {
         "sender_id": user_id,
         "sender_name": user_name,
         "sender_role": role,
         "content": message.get("content", ""),
+        "files": files,
         "timestamp": datetime.utcnow(),
         "is_read": False
     }

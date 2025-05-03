@@ -10,12 +10,25 @@ def validate_object_id(v: Any) -> ObjectId:
         return ObjectId(v)
     raise ValueError("Invalid ObjectId")
 
+class FileReference(BaseModel):
+    file_id: str  # Reference to the ChatFile id
+    filename: str
+    content_type: str
+    size: int
+
+    model_config = {
+        "populate_by_name": True,
+        "arbitrary_types_allowed": True,
+        "json_encoders": {ObjectId: str}
+    }
+
 class Message(BaseModel):
     id: Annotated[ObjectId, BeforeValidator(validate_object_id)] = Field(default_factory=ObjectId, alias="_id")
     sender_id: str
     sender_name: str
     sender_role: str
     content: str
+    files: List[FileReference] = []
     timestamp: datetime = Field(default_factory=datetime.utcnow)
     is_read: bool = False
 

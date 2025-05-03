@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Request, Response, HTTPException, Depends, Query
 from fastapi.middleware.cors import CORSMiddleware
-from routers import auth, materials, materialsHistory, models_training, models_prompt, orders, products, chat
+from routers import auth, materials, materialsHistory, models_training, models_prompt, orders, products, chat, files
 from mongo.mongo_service import MongoDBService
 from firebase.firebase_config import verify_firebase_token
 import logging
@@ -96,3 +96,4 @@ app.include_router(models_prompt.router)
 app.include_router(orders.router)
 app.include_router(products.router)
 app.include_router(chat.router)
+app.include_router(files.router, prefix="")
