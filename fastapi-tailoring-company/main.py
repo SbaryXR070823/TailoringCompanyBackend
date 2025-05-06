@@ -28,7 +28,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],  # Allow all methods temporarily for debugging
     allow_headers=["*"],  # Allow all headers temporarily for debugging
-    expose_headers=["*"]
+    expose_headers=["Content-Disposition", "Content-Type", "Content-Length"]
 )
 # Add a middleware to log requests for debugging
 @app.middleware("http")

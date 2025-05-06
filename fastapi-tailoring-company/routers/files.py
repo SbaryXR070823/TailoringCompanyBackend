@@ -18,7 +18,6 @@ connection_string = "mongodb://localhost:27017/TailoringDb"
 mongodb_service = MongoDBService(connection_string=connection_string)
 gridfs_service = GridFSService(connection_string=connection_string)
 
-# Maximum number of files per message
 MAX_FILES_PER_MESSAGE = 10
 # Maximum file size (10MB)
 MAX_FILE_SIZE = 10 * 1024 * 1024
@@ -35,7 +34,6 @@ async def upload_files(
     
     user_id = str(current_user["_id"])
     
-    # Check if thread exists and user has access
     thread = await mongodb_service.find_by_id(
         collection_name="chat_threads",
         id=ObjectId(thread_id)
@@ -51,7 +49,6 @@ async def upload_files(
     uploaded_files = []
     
     for file in files:
-        # Check file size
         file_size = 0
         content = await file.read()
         file_size = len(content)
@@ -60,10 +57,7 @@ async def upload_files(
         if file_size > MAX_FILE_SIZE:
             raise HTTPException(status_code=400, detail=f"File {file.filename} exceeds maximum size of 10MB")
         
-        # Upload file to GridFS
         storage_id = await gridfs_service.upload_file(file)
-        
-        # Create file metadata
         file_metadata = {
             "filename": file.filename,
             "content_type": file.content_type,
@@ -72,14 +66,20 @@ async def upload_files(
             "uploaded_by": user_id
         }
         
-        # Save file metadata to MongoDB
         file_id = await mongodb_service.insert_one(
             collection_name="chat_files",
             document=file_metadata
         )
         
-        file_metadata["_id"] = file_id
-        uploaded_files.append(file_metadata)
+        # Return the complete file info with both _id and storage_id
+        uploaded_files.append({
+            "_id": file_id,
+            "filename": file.filename,
+            "content_type": file.content_type,
+            "size": file_size,
+            "storage_id": storage_id,
+            "uploaded_by": user_id
+        })
     
     return uploaded_files
 
@@ -89,7 +89,6 @@ async def get_file(
     current_user: dict = Depends(get_current_user)
 ):
     """Get file by ID"""
-    # Retrieve file metadata
     file_metadata = await mongodb_service.find_by_id(
         collection_name="chat_files",
         id=ObjectId(file_id)
@@ -98,11 +97,9 @@ async def get_file(
     if not file_metadata:
         raise HTTPException(status_code=404, detail="File not found")
     
-    # Get the actual file from GridFS
     try:
         file = await gridfs_service.get_file(file_metadata["storage_id"])
         
-        # Create a response with the file
         return StreamingResponse(
             io.BytesIO(file["data"]), 
             media_type=file["content_type"],
@@ -120,11 +117,9 @@ async def delete_file(
     current_user: dict = Depends(get_current_user)
 ):
     """Delete file by ID"""
-    # Only admins or file owners can delete files
     user_id = str(current_user["_id"])
     role = current_user.get("role", "user")
     
-    # Retrieve file metadata
     file_metadata = await mongodb_service.find_by_id(
         collection_name="chat_files",
         id=ObjectId(file_id)
@@ -133,17 +128,14 @@ async def delete_file(
     if not file_metadata:
         raise HTTPException(status_code=404, detail="File not found")
     
-    # Check if user is authorized to delete the file
     if role != "admin" and file_metadata["uploaded_by"] != user_id:
         raise HTTPException(status_code=403, detail="Not authorized to delete this file")
     
-    # Delete file from GridFS
     success = await gridfs_service.delete_file(file_metadata["storage_id"])
     
     if not success:
         raise HTTPException(status_code=500, detail="Error deleting file from storage")
     
-    # Delete file metadata from MongoDB
     deleted_count = await mongodb_service.delete_one(
         collection_name="chat_files",
         query={"_id": ObjectId(file_id)}
@@ -153,3 +145,28 @@ async def delete_file(
         raise HTTPException(status_code=404, detail="File metadata not found")
     
     return {"message": "File deleted successfully"}
+
+@router.get("/files/{file_id}/metadata")
+async def get_file_metadata(
+    file_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get file metadata by ID"""
+    try:
+        file_metadata = await mongodb_service.find_by_id(
+            collection_name="chat_files",
+            id=ObjectId(file_id)
+        )
+        
+        if not file_metadata:
+            raise HTTPException(status_code=404, detail="File not found")
+        
+        # Convert ObjectId to string for JSON serialization
+        file_metadata["_id"] = str(file_metadata["_id"])
+        if "storage_id" in file_metadata:
+            file_metadata["storage_id"] = str(file_metadata["storage_id"])
+        
+        return file_metadata
+    except Exception as e:
+        logger.error(f"Error getting file metadata: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error getting file metadata: {str(e)}")

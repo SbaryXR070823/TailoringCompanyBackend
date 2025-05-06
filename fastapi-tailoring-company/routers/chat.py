@@ -253,31 +253,47 @@ async def add_message_to_thread(
             raise HTTPException(status_code=400, detail="Admins cannot send messages to other admins.")
 
     if role == "user" and thread["user_id"] != user_id:
-        raise HTTPException(status_code=403, detail="Not authorized to send messages to this thread")
+        raise HTTPException(status_code=403, detail="Not authorized to send messages to this thread")    
     files = []
     if "files" in message and isinstance(message["files"], list):
         for file_ref in message["files"]:
             # The incoming file reference might use storage_id instead of file_id
-            file_id = file_ref.get("file_id") or file_ref.get("storage_id")
+            # Try to find by _id first, then by storage_id
+            file_id = None
+            file_metadata = None
             
-            if not file_id:
-                logger.warning(f"Missing file_id or storage_id in file reference: {file_ref}")
-                continue
-                
-            file_metadata = await mongodb_service.find_by_id(
-                collection_name="chat_files",
-                id=ObjectId(file_id)
-            )
+            # First try by _id field 
+            if "_id" in file_ref:
+                try:
+                    file_metadata = await mongodb_service.find_by_id(
+                        collection_name="chat_files",
+                        id=ObjectId(file_ref["_id"])
+                    )
+                except Exception as e:
+                    logger.warning(f"Error finding file by _id {file_ref.get('_id')}: {str(e)}")
+            
+            # Then try by storage_id
+            if not file_metadata and "storage_id" in file_ref:
+                try:
+                    file_metadata_list = await mongodb_service.find_with_conditions(
+                        collection_name="chat_files",
+                        conditions={"storage_id": file_ref["storage_id"]}
+                    )
+                    if file_metadata_list and len(file_metadata_list) > 0:
+                        file_metadata = file_metadata_list[0]
+                except Exception as e:
+                    logger.warning(f"Error finding file by storage_id {file_ref.get('storage_id')}: {str(e)}")
             
             if file_metadata:
                 files.append({
                     "file_id": str(file_metadata["_id"]),
                     "filename": file_metadata["filename"],
                     "content_type": file_metadata["content_type"],
-                    "size": file_metadata["size"]
+                    "size": file_metadata["size"],
+                    "storage_id": file_metadata.get("storage_id", "")
                 })
             else:
-                logger.warning(f"File with ID {file_id} not found in database")
+                logger.warning(f"File not found in database: {file_ref}")
     new_message = {
         "sender_id": user_id,
         "sender_name": user_name,
