@@ -257,12 +257,9 @@ async def add_message_to_thread(
     files = []
     if "files" in message and isinstance(message["files"], list):
         for file_ref in message["files"]:
-            # The incoming file reference might use storage_id instead of file_id
-            # Try to find by _id first, then by storage_id
             file_id = None
             file_metadata = None
             
-            # First try by _id field 
             if "_id" in file_ref:
                 try:
                     file_metadata = await mongodb_service.find_by_id(
@@ -272,7 +269,6 @@ async def add_message_to_thread(
                 except Exception as e:
                     logger.warning(f"Error finding file by _id {file_ref.get('_id')}: {str(e)}")
             
-            # Then try by storage_id
             if not file_metadata and "storage_id" in file_ref:
                 try:
                     file_metadata_list = await mongodb_service.find_with_conditions(
