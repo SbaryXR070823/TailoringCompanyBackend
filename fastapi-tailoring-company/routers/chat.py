@@ -141,9 +141,11 @@ async def get_user_chat_threads(current_user: dict = Depends(get_current_user)):
 @router.get("/chat/thread/{thread_id}", response_model=dict)
 async def get_chat_thread(
     thread_id: str,
+    limit: int = Query(30, description="Maximum number of messages to return"),
+    before: Optional[str] = Query(None, description="Get messages before this timestamp"),
     current_user: dict = Depends(get_current_user)
 ):
-    """Get a specific chat thread by ID"""
+    """Get a specific chat thread by ID with optional pagination"""
     user_id = str(current_user["_id"])
     role = current_user.get("role", "user")
     
@@ -159,8 +161,29 @@ async def get_chat_thread(
         raise HTTPException(status_code=403, detail="Not authorized to access this chat thread")
     
     messages = thread.get("messages", [])
-    updated_messages = []
     
+    if limit or before:     
+        if before:
+            try:
+                try:
+                    before_dt = datetime.fromisoformat(before.replace('Z', '+00:00'))
+                except ValueError:
+                    try:
+                        before_dt = datetime.strptime(before, '%Y-%m-%d %H:%M:%S')
+                    except ValueError:
+                        before_dt = datetime.strptime(before, '%Y-%m-%dT%H:%M:%S.%fZ')
+                
+                logger.info(f"Filtering messages before timestamp: {before_dt}")
+                messages = [msg for msg in messages if msg.get("timestamp") < before_dt]
+            except (ValueError, TypeError) as e:
+                logger.error(f"Invalid 'before' timestamp format: {before}, error: {str(e)}")
+        
+        messages.sort(key=lambda x: x.get("timestamp", datetime.min))
+        
+        if limit > 0 and len(messages) > limit:
+            messages = messages[-limit:]
+    
+    updated_messages = []
     needs_update = False
     for message in messages:
         if not message.get("is_read", False) and message.get("sender_id") != user_id:
@@ -169,14 +192,17 @@ async def get_chat_thread(
         updated_messages.append(message)
     
     if needs_update:
-        thread["messages"] = updated_messages
         await mongodb_service.update_one(
             collection_name="chat_threads",
             query={"_id": ObjectId(thread_id)},
-            update={"messages": updated_messages}
+            update={"$set": {"messages.$[elem].is_read": True}},
+            array_filters=[{"elem.is_read": False, "elem.sender_id": {"$ne": user_id}}]
         )
     
-    return thread
+    thread_copy = dict(thread)
+    thread_copy["messages"] = updated_messages
+    
+    return thread_copy
 
 @router.post("/chat/thread", response_model=dict)
 async def create_chat_thread(current_user: dict = Depends(get_current_user)):
