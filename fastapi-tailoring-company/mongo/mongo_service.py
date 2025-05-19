@@ -37,14 +37,25 @@ class MongoDBService:
         except Exception as e:
             logger.error(f"Error retrieving documents from {collection_name}: {str(e)}")
         
-        return documents
-
-    async def update_one(self, collection_name: str, query: dict, update: dict):
+        return documents    
+    async def update_one(self, collection_name: str, query: dict, update: dict, array_filters=None):
         logger.info(f"Updating document in {collection_name} with query: {query} and update: {update}")
+        options = {
+            "return_document": ReturnDocument.AFTER
+        }
+        
+        if array_filters:
+            options["array_filters"] = array_filters
+            
+        if update.get("$set"):
+            update_doc = update
+        else:
+            update_doc = {"$set": update}
+            
         updated_document = await self.db[collection_name].find_one_and_update(
             query,
-            {"$set": update},
-            return_document=ReturnDocument.AFTER
+            update_doc,
+            **options
         )
         if updated_document:
             updated_document['_id'] = str(updated_document['_id'])  
