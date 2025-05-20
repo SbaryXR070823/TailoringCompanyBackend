@@ -1,7 +1,12 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Body
 from mongo.mongo_service import MongoDBService
 import logging
 from bson import ObjectId
+from pydantic import BaseModel
+from typing import Optional
+
+class StockUpdate(BaseModel):
+    quantityChange: int
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -58,3 +63,41 @@ async def delete_material(material_id: str):
     if deleted_count == 0:
         raise HTTPException(status_code=404, detail="Material not found")
     return {"message": "Material deleted successfully"}
+
+@router.patch("/materials/{material_id}/stock")
+async def update_material_stock(material_id: str, stock_update: StockUpdate = Body(...)):
+    """
+    Update the stock quantity of a material
+    
+    - **material_id**: ID of the material to update
+    - **quantityChange**: Amount to add to the stock (negative to decrease)
+    """
+    try:
+        material = await mongodb_service.find_one(collection_name='materials', query={"_id": ObjectId(material_id)})
+        if not material:
+            raise HTTPException(status_code=404, detail="Material not found")
+        
+        current_stock = material.get("stock", 0)
+        
+        new_stock = current_stock + stock_update.quantityChange
+        
+        if new_stock < 0:
+            raise HTTPException(status_code=400, detail=f"Insufficient stock. Current: {current_stock}, Requested change: {stock_update.quantityChange}")
+        
+        result = await mongodb_service.update_one(
+            collection_name='materials',
+            query={"_id": ObjectId(material_id)},
+            update={"stock": new_stock}
+        )
+        
+        if not result:
+            raise HTTPException(status_code=400, detail="Material stock update failed")
+        
+        updated_material = await mongodb_service.find_one(collection_name='materials', query={"_id": ObjectId(material_id)})
+        return updated_material
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating material stock: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error updating material stock: {str(e)}")
