@@ -4,9 +4,11 @@ import logging
 from bson import ObjectId
 from pydantic import BaseModel
 from typing import Optional
+from datetime import datetime
 
 class StockUpdate(BaseModel):
-    quantityChange: int
+    quantityChange: int 
+    changeType: str
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -35,7 +37,20 @@ async def create_material(material: dict):
     if not new_material:
         raise HTTPException(status_code=500, detail="Error retrieving the created material")
 
-    return new_material 
+    try:        
+        stock_change = {
+            "material_id": str(material_id),
+            "change_type": "InitialStock",
+            "quantity": material.get("stock", 0),
+            "price_at_time": material.get("price", 0),
+            "total_value": material.get("stock", 0) * material.get("price", 0),
+            "date": datetime.utcnow()
+        }
+        await mongodb_service.insert_one(collection_name='stock_changes', document=stock_change)
+    except Exception as e:
+        logger.error(f"Error creating stock change record: {str(e)}")
+
+    return new_material
 
 @router.get("/materials/{material_id}")
 async def get_material(material_id: str):
@@ -71,6 +86,7 @@ async def update_material_stock(material_id: str, stock_update: StockUpdate = Bo
     
     - **material_id**: ID of the material to update
     - **quantityChange**: Amount to add to the stock (negative to decrease)
+    - **changeType**: Type of change (StockUpdate or OrderUpdate)
     """
     try:
         material = await mongodb_service.find_one(collection_name='materials', query={"_id": ObjectId(material_id)})
@@ -78,6 +94,7 @@ async def update_material_stock(material_id: str, stock_update: StockUpdate = Bo
             raise HTTPException(status_code=404, detail="Material not found")
         
         current_stock = material.get("stock", 0)
+        current_price = material.get("price", 0)
         
         new_stock = current_stock + stock_update.quantityChange
         
@@ -87,11 +104,21 @@ async def update_material_stock(material_id: str, stock_update: StockUpdate = Bo
         result = await mongodb_service.update_one(
             collection_name='materials',
             query={"_id": ObjectId(material_id)},
-            update={"stock": new_stock}
+            update={"$set": {"stock": new_stock}}
         )
         
         if not result:
             raise HTTPException(status_code=400, detail="Material stock update failed")
+
+        stock_change = {
+            "material_id": str(material["_id"]),
+            "change_type": stock_update.changeType,
+            "quantity": stock_update.quantityChange,
+            "price_at_time": current_price,
+            "total_value": stock_update.quantityChange * current_price,
+            "date": datetime.utcnow()
+        }
+        await mongodb_service.insert_one(collection_name='stock_changes', document=stock_change)
         
         updated_material = await mongodb_service.find_one(collection_name='materials', query={"_id": ObjectId(material_id)})
         return updated_material

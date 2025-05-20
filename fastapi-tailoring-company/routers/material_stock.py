@@ -3,7 +3,8 @@ from pydantic import BaseModel
 from typing import Optional
 from bson import ObjectId
 from models.material_model import Material
-from mongo.mongodb import get_collection
+from mongo.mongodb import get_collection, mongodb_service
+from datetime import datetime
 import logging
 
 router = APIRouter(
@@ -13,6 +14,7 @@ router = APIRouter(
 
 class StockUpdate(BaseModel):
     quantityChange: int
+    changeType: str
 
 @router.patch("/{material_id}/stock", response_model=Material)
 async def update_material_stock(
@@ -32,6 +34,7 @@ async def update_material_stock(
             raise HTTPException(status_code=404, detail="Material not found")
         
         current_stock = material.get("stock", 0)
+        current_price = material.get("price", 0)
         
         new_stock = current_stock + stock_update.quantityChange
         
@@ -45,6 +48,16 @@ async def update_material_stock(
         
         if result.modified_count == 0:
             raise HTTPException(status_code=400, detail="Material stock update failed")
+
+        stock_change = {
+            "material_id": str(material["_id"]),
+            "change_type": stock_update.changeType,
+            "quantity": stock_update.quantityChange,
+            "price_at_time": current_price,
+            "total_value": stock_update.quantityChange * current_price,
+            "date": datetime.utcnow()
+        }
+        await mongodb_service.insert_one(collection_name='stock_changes', document=stock_change)
         
         updated_material = await collection.find_one({"_id": ObjectId(material_id)})
         updated_material["_id"] = str(updated_material["_id"])

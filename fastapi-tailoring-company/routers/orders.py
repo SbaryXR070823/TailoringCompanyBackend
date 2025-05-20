@@ -34,6 +34,26 @@ async def create_order(order: dict):
         if not new_order:
             raise HTTPException(status_code=500, detail="Error retrieving the created order")
 
+        if "materials" in order:
+            for material_use in order["materials"]:
+                material_id = material_use.get("materialId")
+                quantity_used = material_use.get("quantity", 0)
+                
+                if material_id and quantity_used > 0:
+                    material = await mongodb_service.find_one(
+                        collection_name='materials', 
+                        query={"_id": ObjectId(material_id)}
+                    )
+                    if material:
+                        stock_change = {
+                            "material_id": material_id,
+                            "change_type": "OrderUpdate",
+                            "quantity": -quantity_used,  # Negative because stock is being used
+                            "price_at_time": material.get("price", 0),
+                            "total_value": -quantity_used * material.get("price", 0)
+                        }
+                        await mongodb_service.insert_one(collection_name='stock_changes', document=stock_change)
+
         logger.info(f"Order created with ID: {order_id}")
         return new_order
     except Exception as e:
