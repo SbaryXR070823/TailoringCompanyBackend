@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 from bson import ObjectId
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_serializer, ConfigDict
 
 class StockChangeType:
     INITIAL_STOCK = "InitialStock"
@@ -15,8 +15,13 @@ class StockChange(BaseModel):
     date: datetime = Field(default_factory=datetime.now)
     quantity: float
     price_at_time: float
-    total_value: float    
-    model_config = {
-        'json_encoders': {ObjectId: str},
-        'populate_by_name': True
-    }
+    total_value: float
+    
+    model_config = ConfigDict(
+        populate_by_name=True,
+        extra='ignore'
+    )
+    
+    @field_serializer('date')
+    def serialize_dt(self, dt: datetime):
+        return dt.isoformat()

@@ -90,4 +90,44 @@ class MongoDBService:
             return document
         except Exception as e:
             logger.error(f"Error finding document by id in {collection_name}: {str(e)}")
-            return None
+            return None    
+    async def find_with_pagination(self, collection_name: str, skip: int = 0, limit: int = 10, conditions: dict = None):
+        """Find documents with pagination support."""
+        logger.info(f"Finding documents in {collection_name} with pagination: skip={skip}, limit={limit}, conditions={conditions}")
+        documents = []
+        try:
+            query = conditions if conditions else {}
+            
+            total_count = await self.db[collection_name].count_documents(query)
+            
+            cursor = self.db[collection_name].find(query).skip(skip).limit(limit)
+            
+            async for document in cursor:
+                document['_id'] = str(document['_id'])
+                documents.append(document)
+                logger.debug(f"Retrieved document: {document['_id']}")
+            
+            logger.info(f"Retrieved {len(documents)} documents from {collection_name} with pagination")
+            
+            return {
+                "data": documents,
+                "pagination": {
+                    "total": total_count,
+                    "skip": skip,
+                    "limit": limit,
+                    "hasMore": total_count > (skip + limit)
+                }
+            }
+        except Exception as e:
+            import traceback
+            logger.error(f"Error retrieving documents with pagination from {collection_name}: {str(e)}")
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            return {
+                "data": [],
+                "pagination": {
+                    "total": 0,
+                    "skip": skip,
+                    "limit": limit,
+                    "hasMore": False
+                }
+            }

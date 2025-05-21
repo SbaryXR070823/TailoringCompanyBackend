@@ -98,3 +98,19 @@ app.include_router(products.router)
 app.include_router(chat.router)
 app.include_router(files.router, prefix="")
 app.include_router(stock_changes.router)
+
+# Add a 404 page
+@app.exception_handler(404)
+async def custom_404_handler(request, exc):
+    logger.warning(f"404 Not Found: {request.url}")
+    return {"message": "The requested resource was not found"}
+
+# Add a 500 error handler
+@app.exception_handler(500)
+async def custom_500_handler(request, exc):
+    logger.error(f"500 Internal Server Error: {exc}")
+    return {"message": "Internal server error, please try again later"}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
