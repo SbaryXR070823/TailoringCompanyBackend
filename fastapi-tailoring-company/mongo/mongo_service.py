@@ -38,6 +38,28 @@ class MongoDBService:
             logger.error(f"Error retrieving documents from {collection_name}: {str(e)}")
         
         return documents    
+
+    async def find_all_sorted(self, collection_name: str, sort=None):
+        """Find all documents in a collection with optional sorting"""
+        logger.info(f"Finding all documents in {collection_name} with sort: {sort}")
+        documents = []
+        try:
+            cursor = self.db[collection_name].find()
+            
+            if sort:
+                cursor = cursor.sort(sort)
+                
+            async for document in cursor:
+                document['_id'] = str(document['_id'])  
+                documents.append(document)
+                logger.debug(f"Retrieved document: {document['_id']}")
+            
+            logger.info(f"Retrieved {len(documents)} sorted documents from {collection_name}")
+        except Exception as e:
+            logger.error(f"Error retrieving sorted documents from {collection_name}: {str(e)}")
+        
+        return documents
+
     async def update_one(self, collection_name: str, query: dict, update: dict, array_filters=None):
         logger.info(f"Updating document in {collection_name} with query: {query} and update: {update}")
         options = {
@@ -65,6 +87,17 @@ class MongoDBService:
         logger.info(f"Deleting document from {collection_name} with query: {query}")
         result = await self.db[collection_name].delete_one(query)
         return result.deleted_count
+
+    async def delete_by_id(self, collection_name: str, id):
+        """Delete a document by its ID and return the result"""
+        logger.info(f"Deleting document from {collection_name} with _id: {id}")
+        try:
+            result = await self.db[collection_name].delete_one({"_id": id})
+            logger.info(f"Deleted {result.deleted_count} document(s) from {collection_name}")
+            return result
+        except Exception as e:
+            logger.error(f"Error deleting document by id from {collection_name}: {str(e)}")
+            raise
 
     async def find_with_conditions(self, collection_name: str, conditions: dict):
         logger.info(f"Finding documents in {collection_name} with conditions: {conditions}")

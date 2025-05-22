@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Request, Response, HTTPException, Depends, Query
 from fastapi.middleware.cors import CORSMiddleware
-from routers import auth, materials, materialsHistory, models_training, models_prompt, orders, products, chat, files, stock_changes
+from routers import auth, materials, materialsHistory, models_training, models_prompt, orders, products, chat, files, stock_changes, carousel_service
 from mongo.mongo_service import MongoDBService
 from firebase.firebase_config import verify_firebase_token
 import logging
@@ -38,7 +38,6 @@ async def log_requests(request: Request, call_next):
     
     if logger.level <= logging.DEBUG:
         logger.debug(f"Request headers: {request.headers}")
-    
     try:
         response = await call_next(request)
         
@@ -98,6 +97,7 @@ app.include_router(products.router)
 app.include_router(chat.router)
 app.include_router(files.router, prefix="")
 app.include_router(stock_changes.router)
+app.include_router(carousel_service.router) 
 
 # Add a 404 page
 @app.exception_handler(404)

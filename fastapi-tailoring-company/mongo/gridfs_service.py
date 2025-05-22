@@ -17,14 +17,16 @@ class GridFSService:
         
         self.client = pymongo.MongoClient(connection_string)
         self.db = self.client[database_name]
-        self.fs = GridFSBucket(self.db)
+        self.fs = GridFSBucket(self.db)      
     async def upload_file(self, file: UploadFile) -> str:
         """
         Upload a file to GridFS
         Returns the file_id as a string
         """
         try:
+            logger.info(f"GridFS: Starting upload of file {file.filename}, content_type: {file.content_type}")
             file_data = await file.read()
+            logger.info(f"GridFS: Read {len(file_data)} bytes from file")
             file_id = self.fs.upload_from_stream(
                 filename=file.filename,
                 source=file_data,
@@ -32,10 +34,14 @@ class GridFSService:
                     "content_type": file.content_type
                 }
             )
+            logger.info(f"GridFS: File uploaded successfully with ID: {file_id}")
             await file.seek(0)  # Reset file pointer
             return str(file_id)
         except PyMongoError as e:
             logger.error(f"Error uploading file to GridFS: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error uploading file to GridFS: {str(e)}")
             raise
     async def get_file(self, file_id: str):
         """
