@@ -109,9 +109,11 @@ async def predict_product_workmanship(request: dict):
                 product_data=product_data,
                 order_data=order_data
             )
+              # Round to the nearest tens place (round to nearest 10)
+            rounded_prediction = round(prediction / 10) * 10
             
             return {
-                "predicted_workmanship": round(prediction, 2),
+                "predicted_workmanship": rounded_prediction,
                 "confidence_level": "high" if prediction >= 80 else "medium" if prediction >= 65 else "low"
             }
             
