@@ -5,20 +5,17 @@ from mongo.mongo_service import MongoDBService
 from firebase.firebase_config import verify_firebase_token
 import logging
 
-# Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
-# Add CORS middleware with all possible configurations
 origins = [
     "http://localhost:4200",
     "http://127.0.0.1:4200",
     "http://localhost:4000",
     "http://127.0.0.1:4000",
-    "null",  # For debugging purposes
-    # Add any other origins you need
+    "null",  
 ]
     
 # Add CORS middleware
@@ -26,8 +23,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
     allow_credentials=True,
-    allow_methods=["*"],  # Allow all methods temporarily for debugging
-    allow_headers=["*"],  # Allow all headers temporarily for debugging
+    allow_methods=["*"],  
+    allow_headers=["*"],  
     expose_headers=["Content-Disposition", "Content-Type", "Content-Length"]
 )
 # Add a middleware to log requests for debugging
