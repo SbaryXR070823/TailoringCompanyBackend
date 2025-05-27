@@ -59,20 +59,20 @@ async def upload_carousel_image(
         
     if current_user.get("role") != "admin":
         logger.warning(f"User {current_user.get('email')} with role {current_user.get('role')} attempted to upload image but is not an admin")
-        raise HTTPException(status_code=403, detail="Only administrators can upload carousel images")
+        raise HTTPException(status_code=403, detail="Only administrators can upload carousel images")    
     try:
         logger.info(f"Uploading file {file.filename} to GridFS")
-        upload_result = await gridfs_service.upload_file(file)
-        file_id = upload_result["file_id"]
-        thumbnail_id = upload_result.get("thumbnail_id")
+        upload_result = await gridfs_service.upload_file(file, generate_thumbnail=False)
+        if isinstance(upload_result, dict):
+            file_id = upload_result["file_id"]
+        else:
+            file_id = upload_result
         
         carousel_image = {
             "name": name,
             "description": description,
             "fileId": file_id,
-            "thumbnailId": thumbnail_id,
             "url": f"/api/carousel-images/file/{file_id}",
-            "thumbnailUrl": f"/api/carousel-images/file/{file_id}/thumbnail" if thumbnail_id else None,
             "createdAt": datetime.now(),
             "createdBy": str(current_user.get("_id"))
         }
@@ -110,42 +110,6 @@ async def get_carousel_image_file(file_id: str):
         logger.error(f"Error retrieving carousel image file: {e}")
         raise HTTPException(status_code=404, detail="Image not found")
 
-@router.get("/carousel-images/file/{file_id}/thumbnail")
-async def get_carousel_image_thumbnail(file_id: str):
-    """Get carousel image thumbnail"""
-    try:
-        logger.info(f"Retrieving thumbnail for file with ID: {file_id}")
-        
-        carousel_image = await mongodb_service.find_one(
-            collection_name="carousel_images",
-            query={"fileId": file_id}
-        )
-        
-        if not carousel_image:
-            logger.warning(f"Carousel image with fileId {file_id} not found")
-            return await get_carousel_image_file(file_id)
-        
-        thumbnail_id = carousel_image.get("thumbnailId")
-        if not thumbnail_id:
-            logger.info(f"No thumbnail found for file {file_id}, returning original")
-            return await get_carousel_image_file(file_id)
-        
-        file_data = await gridfs_service.get_file(thumbnail_id)
-        
-        if not file_data:
-            logger.warning(f"Thumbnail file with ID {thumbnail_id} not found")
-            return await get_carousel_image_file(file_id)
-            
-        logger.info(f"Returning thumbnail {thumbnail_id} with content type: {file_data['content_type']}")
-        
-        return StreamingResponse(
-            content=iter([file_data["data"]]),
-            media_type=file_data["content_type"]
-        )
-    except Exception as e:
-        logger.error(f"Error retrieving carousel image thumbnail: {e}")
-        return await get_carousel_image_file(file_id)
-
 @router.delete("/carousel-images/{image_id}")
 async def delete_carousel_image(
     image_id: str,
@@ -167,20 +131,15 @@ async def delete_carousel_image(
             collection_name="carousel_images",
             id=ObjectId(image_id)
         )
-        
         if not image:
             logger.warning(f"Image with ID {image_id} not found")
             raise HTTPException(status_code=404, detail="Carousel image not found")
+        
         file_id = image.get("fileId")
-        thumbnail_id = image.get("thumbnailId")
         
         if file_id:
             logger.info(f"Deleting file {file_id} from GridFS")
             await gridfs_service.delete_file(file_id)
-        
-        if thumbnail_id:
-            logger.info(f"Deleting thumbnail {thumbnail_id} from GridFS")
-            await gridfs_service.delete_file(thumbnail_id)
         
         logger.info(f"Deleting image record {image_id} from MongoDB")
         result = await mongodb_service.delete_by_id(

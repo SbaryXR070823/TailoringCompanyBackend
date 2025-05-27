@@ -19,11 +19,12 @@ class GridFSService:
         
         self.client = pymongo.MongoClient(connection_string)
         self.db = self.client[database_name]
-        self.fs = GridFSBucket(self.db)        
-    async def upload_file(self, file: UploadFile) -> dict:
+        self.fs = GridFSBucket(self.db)          
+        
+    async def upload_file(self, file: UploadFile, generate_thumbnail: bool = True) -> dict:
         """
         Upload a file to GridFS
-        For images, also creates and uploads a thumbnail
+        For images, also creates and uploads a thumbnail if generate_thumbnail is True
         Returns a dict with file_id and thumbnail_id (if applicable)
         """
         try:
@@ -40,10 +41,9 @@ class GridFSService:
                 }
             )
             logger.info(f"GridFS: Original file uploaded successfully with ID: {file_id}")
-            
             result = {"file_id": str(file_id)}
             
-            if file.content_type and file.content_type.startswith('image/'):
+            if generate_thumbnail and file.content_type and file.content_type.startswith('image/'):
                 try:
                     thumbnail_data = await self._generate_thumbnail(file_data, file.content_type)
                     if thumbnail_data:
