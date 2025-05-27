@@ -1,9 +1,10 @@
 from fastapi import FastAPI, Request, Response, HTTPException, Depends, Query
 from fastapi.middleware.cors import CORSMiddleware
-from routers import auth, materials, materialsHistory, models_training, models_prompt, orders, products, chat, files, stock_changes, carousel_service
+from routers import auth, materials, materialsHistory, models_training, models_prompt, orders, products, chat, files, stock_changes, carousel_service, database
 from mongo.mongo_service import MongoDBService
 from firebase.firebase_config import verify_firebase_token
 import logging
+from datetime import datetime
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -94,7 +95,9 @@ app.include_router(products.router)
 app.include_router(chat.router)
 app.include_router(files.router, prefix="")
 app.include_router(stock_changes.router)
-app.include_router(carousel_service.router) 
+app.include_router(carousel_service.router)
+app.include_router(database.router)
+app.include_router(database.router)
 
 # Add a 404 page
 @app.exception_handler(404)

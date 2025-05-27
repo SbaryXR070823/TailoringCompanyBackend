@@ -32,18 +32,24 @@ async def get_current_user(authorization: str = Header(...)):
         logger.info(f"Authorization header: {authorization}")
         token = authorization.split("Bearer ")[1]
         logger.info(f"Token: {token[:20]}...") 
-        
         try:
-            decoded_token = await verify_token_from_db(token)
-            logger.info(f"Token verified from database for UID: {decoded_token['uid']}")
-        except Exception as db_error:
-            logger.warning(f"Database token verification failed: {str(db_error)}, trying Firebase")
             decoded_token = verify_firebase_token(token)
             logger.info(f"Token verified from Firebase for UID: {decoded_token['uid']}")
+            logger.info(f"Firebase token claims: {decoded_token}")
+        except Exception as firebase_error:
+            logger.warning(f"Firebase token verification failed: {str(firebase_error)}, trying database")
+            try:
+                decoded_token = await verify_token_from_db(token)
+                logger.info(f"Token verified from database for UID: {decoded_token['uid']}")
+            except Exception as db_error:
+                logger.error(f"Both Firebase and database token verification failed")
+                raise HTTPException(status_code=401, detail="Token verification failed")
+        
         user = await mongodb_service.find_one(
             collection_name="users",
             query={"firebase_uid": decoded_token['uid']}
         )
+        
         if not user:
             logger.info(f"User not found in database, creating user object from Firebase token and inserting into DB")
             email = decoded_token.get('email')
@@ -58,10 +64,28 @@ async def get_current_user(authorization: str = Header(...)):
                 "role": decoded_token.get('role', 'user'),
                 "name": name if name else (email if email else "Anonymous User"),
                 "created_at": datetime.utcnow()
-            }
+            }            
             logger.info(f"Creating new user with data: {user}")
             user_id = await mongodb_service.insert_one("users", user)
             user["_id"] = user_id
+        else:
+            logger.info(f"User found in database: {user}")
+            firebase_role = decoded_token.get('role', 'user')
+            current_role = user.get('role', 'user')
+            logger.info(f"Firebase role: {firebase_role}, Database role: {current_role}")
+            
+            if current_role != firebase_role:
+                logger.info(f"Role mismatch detected! Updating user role from {current_role} to {firebase_role}")
+                update_result = await mongodb_service.update_one(
+                    collection_name="users",
+                    query={"firebase_uid": decoded_token['uid']},
+                    update={"$set": {"role": firebase_role}}
+                )
+                logger.info(f"Update result: {update_result}")
+                user['role'] = firebase_role
+                logger.info(f"User role successfully updated to: {firebase_role}")
+            else:
+                logger.info(f"Roles are in sync: {firebase_role}")
         return user
     except IndexError:
         raise HTTPException(status_code=401, detail="Invalid authorization header format")
