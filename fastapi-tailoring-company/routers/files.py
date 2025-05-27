@@ -47,7 +47,6 @@ async def upload_files(
         raise HTTPException(status_code=403, detail="Not authorized to access this chat thread")
     
     uploaded_files = []
-    
     for file in files:
         file_size = 0
         content = await file.read()
@@ -57,12 +56,15 @@ async def upload_files(
         if file_size > MAX_FILE_SIZE:
             raise HTTPException(status_code=400, detail=f"File {file.filename} exceeds maximum size of 10MB")
         
-        storage_id = await gridfs_service.upload_file(file)
+        # Upload file (and thumbnail if it's an image)
+        upload_result = await gridfs_service.upload_file(file)
+        
         file_metadata = {
             "filename": file.filename,
             "content_type": file.content_type,
             "size": file_size,
-            "storage_id": storage_id,
+            "storage_id": upload_result["file_id"],
+            "thumbnail_id": upload_result.get("thumbnail_id"),  # May be None for non-images
             "uploaded_by": user_id
         }
         
@@ -77,7 +79,8 @@ async def upload_files(
             "filename": file.filename,
             "content_type": file.content_type,
             "size": file_size,
-            "storage_id": storage_id,
+            "storage_id": upload_result["file_id"],
+            "thumbnail_id": upload_result.get("thumbnail_id"),
             "uploaded_by": user_id
         })
     
@@ -170,3 +173,36 @@ async def get_file_metadata(
     except Exception as e:
         logger.error(f"Error getting file metadata: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error getting file metadata: {str(e)}")
+
+@router.get("/files/{file_id}/thumbnail")
+async def get_file_thumbnail(
+    file_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get thumbnail for an image file by ID"""
+    file_metadata = await mongodb_service.find_by_id(
+        collection_name="chat_files",
+        id=ObjectId(file_id)
+    )
+    
+    if not file_metadata:
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    thumbnail_id = file_metadata.get("thumbnail_id")
+    if not thumbnail_id:
+        # If no thumbnail, return the original file (for non-images or fallback)
+        return await get_file(file_id, current_user)
+    
+    try:
+        file = await gridfs_service.get_file(thumbnail_id)
+        
+        return StreamingResponse(
+            io.BytesIO(file["data"]), 
+            media_type=file["content_type"],
+            headers={
+                "Content-Disposition": f"inline; filename=\"thumb_{file['filename']}\""
+            }
+        )
+    except Exception as e:
+        logger.error(f"Error retrieving thumbnail: {e}")
+        return await get_file(file_id, current_user)
