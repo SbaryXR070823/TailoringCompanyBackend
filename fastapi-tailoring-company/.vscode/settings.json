@@ -1,5 +1,14 @@
 {
     "cSpell.words": [
-        "pydantic"
-    ]
+        "pydantic",
+    ],
+    "files.exclude": {
+        "**/.git": true,
+        "**/.svn": true,
+        "**/.hg": true,
+        "**/.DS_Store": true,
+        "**/Thumbs.db": true,
+        "**/_pycache": true,
+        "**/__pycache__": true,
+    }
 }
